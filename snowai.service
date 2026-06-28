@@ -1,0 +1,21 @@
+[Unit]
+Description=SnowAI — Zabbix AI Analysis Service
+After=network.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/snowai
+ExecStart=/usr/bin/python3 /opt/snowai/app.py
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=snowai
+
+# Ortam değişkeni olarak da tanımlanabilir (config.py yerine)
+# Environment="ANTHROPIC_API_KEY=sk-ant-..."
+
+[Install]
+WantedBy=multi-user.target
