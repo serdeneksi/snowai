@@ -46,6 +46,15 @@ Script çalışırken **Cloudflare Account ID** ve **API Token** bilgilerini sor
 ## Kaldırma
 
 ```bash
+cd /path/to/snowai
+sudo bash uninstall.sh
+```
+
+> `snowai` klasörünü nereye clone ettiyseniz önce oraya geçin. Uninstall scripti tüm servis dosyalarını, Zabbix entegrasyonunu ve clone dizinini tamamen siler.
+
+Kurulum sırasında varsayılan olarak home dizinine clone edilmişse:
+```bash
+cd ~/snowai
 sudo bash uninstall.sh
 ```
 
