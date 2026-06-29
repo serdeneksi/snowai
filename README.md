@@ -33,10 +33,10 @@ Script çalışırken **Cloudflare Account ID** ve **API Token** bilgilerini sor
 ### Cloudflare bilgilerini nereden alırsın?
 
 **Account ID:**
-- dash.cloudflare.com → sağ taraf → Account ID
+- dash.cloudflare.com → Build / AI / Workers AI (sol panel) → REST API
 
 **API Token:**
-- dash.cloudflare.com → My Profile → API Tokens → Create Token
+- dash.cloudflare.com → Build / AI / Workers AI (sol panel) → REST API → Create a Workers AI API Token
 - Permissions: `Account → Workers AI → Edit`
 
 ---
