@@ -35,16 +35,19 @@ if [ "$EUID" -ne 0 ]; then
     error "Bu scripti root veya sudo ile çalıştırın: sudo bash install.sh"
 fi
 
-# API anahtarı al
-echo -e "${YELLOW}Google Gemini API anahtarınızı girin (AIza... ile başlamalı):${NC}"
-read -r -p "> " GEMINI_KEY
+# API bilgilerini al
+echo -e "${YELLOW}Cloudflare Account ID girin:${NC}"
+read -r -p "> " CF_ACCOUNT_ID
 
-if [ -z "$GEMINI_KEY" ]; then
-    error "API anahtarı boş olamaz."
+if [ -z "$CF_ACCOUNT_ID" ]; then
+    error "Account ID boş olamaz."
 fi
 
-if [[ "$GEMINI_KEY" != AIza* ]]; then
-    warn "API anahtarı 'AIza' ile başlamıyor. Devam ediliyor ama hatalı olabilir."
+echo -e "${YELLOW}Cloudflare API Token girin:${NC}"
+read -r -p "> " CF_API_TOKEN
+
+if [ -z "$CF_API_TOKEN" ]; then
+    error "API Token boş olamaz."
 fi
 
 echo ""
@@ -71,8 +74,9 @@ mkdir -p "$INSTALL_DIR"
 cp "${REPO_DIR}/app.py"    "$INSTALL_DIR/"
 cp "${REPO_DIR}/teams.py"  "$INSTALL_DIR/"
 
-# config.py — API anahtarını yerleştir
-sed "s|AIza-BURAYA_API_ANAHTARINIZI_YAZIN|${GEMINI_KEY}|g" \
+# config.py — API bilgilerini yerleştir
+sed -e "s|BURAYA_CLOUDFLARE_API_TOKEN_YAZIN|${CF_API_TOKEN}|g" \
+    -e "s|BURAYA_ACCOUNT_ID_YAZIN|${CF_ACCOUNT_ID}|g" \
     "${REPO_DIR}/config.py" > "${INSTALL_DIR}/config.py"
 
 success "Backend dosyaları kopyalandı."

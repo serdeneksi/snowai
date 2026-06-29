@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# SnowAI — Flask Backend (Google Gemini)
+# SnowAI — Flask Backend (Cloudflare Workers AI)
 # /opt/snowai/app.py
 
 import json
@@ -10,8 +10,9 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 
 from config import (
-    GEMINI_API_KEY,
-    GEMINI_MODEL,
+    CLOUDFLARE_API_TOKEN,
+    CLOUDFLARE_ACCOUNT_ID,
+    CLOUDFLARE_MODEL,
     SNOWAI_HOST,
     SNOWAI_PORT,
     SEVERITY_MAP
@@ -42,7 +43,7 @@ SYSTEM_PROMPT = (
 )
 
 
-def call_gemini(problem: str, host: str, severity: str, duration: str) -> dict:
+def call_cloudflare(problem: str, host: str, severity: str, duration: str) -> dict:
     severity_label = SEVERITY_MAP.get(str(severity), severity)
 
     user_msg = (
@@ -53,25 +54,18 @@ def call_gemini(problem: str, host: str, severity: str, duration: str) -> dict:
         "Bu alarm icin kisa analiz yap ve aciliyeti belirle."
     )
 
-    full_prompt = SYSTEM_PROMPT + "\n\n" + user_msg
-
     payload = json.dumps({
-        "contents": [
-            {
-                "parts": [{"text": full_prompt}]
-            }
-        ],
-        "generationConfig": {
-            "maxOutputTokens": 500,
-            "temperature": 0.3,
-            "responseMimeType": "application/json"
-        }
+        "messages": [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user",   "content": user_msg}
+        ]
     }).encode("utf-8")
 
     url = (
-        "https://generativelanguage.googleapis.com/v1beta/models/"
-        + GEMINI_MODEL
-        + ":generateContent"
+        "https://api.cloudflare.com/client/v4/accounts/"
+        + CLOUDFLARE_ACCOUNT_ID
+        + "/ai/run/"
+        + CLOUDFLARE_MODEL
     )
 
     req = urllib.request.Request(
@@ -79,15 +73,15 @@ def call_gemini(problem: str, host: str, severity: str, duration: str) -> dict:
         data=payload,
         headers={
             "Content-Type": "application/json",
-            "x-goog-api-key": GEMINI_API_KEY
+            "Authorization": "Bearer " + CLOUDFLARE_API_TOKEN
         },
         method="POST"
     )
 
-    with urllib.request.urlopen(req, timeout=15) as resp:
+    with urllib.request.urlopen(req, timeout=20) as resp:
         data = json.loads(resp.read().decode("utf-8"))
 
-    raw = data["candidates"][0]["content"]["parts"][0]["text"].strip()
+    raw = data["result"]["choices"][0]["message"]["content"].strip()
 
     # JSON fence temizligi
     if raw.startswith("```"):
@@ -95,6 +89,12 @@ def call_gemini(problem: str, host: str, severity: str, duration: str) -> dict:
         if raw.startswith("json"):
             raw = raw[4:]
     raw = raw.strip()
+
+    # Sadece JSON kismini al
+    start = raw.find("{")
+    end   = raw.rfind("}") + 1
+    if start != -1 and end > start:
+        raw = raw[start:end]
 
     return json.loads(raw)
 
@@ -125,9 +125,9 @@ def analyze():
     logger.info("Analiz istegi - host=%s problem=%s severity=%s", host, problem, severity)
 
     try:
-        ai_result = call_gemini(problem, host, severity, duration)
+        ai_result = call_cloudflare(problem, host, severity, duration)
     except urllib.error.URLError as exc:
-        logger.error("Gemini baglanti hatasi: %s", exc)
+        logger.error("Cloudflare baglanti hatasi: %s", exc)
         return jsonify({"error": "Yapay zeka servisine ulasilamadi", "detail": str(exc)}), 502
     except (KeyError, json.JSONDecodeError) as exc:
         logger.error("Yanit ayristirma hatasi: %s", exc)
