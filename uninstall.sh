@@ -1,6 +1,7 @@
 #!/bin/bash
 # SnowAI — Kaldırma Scripti
 # Kullanım: sudo bash uninstall.sh
+# Tüm SnowAI dosyalarını ve clone dizinini siler.
 # ==========================================================================
 
 set -e
@@ -12,10 +13,12 @@ APACHE_CONF="/etc/apache2/conf-enabled/zabbix.conf"
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 BLUE='\033[0;34m'
+YELLOW='\033[1;33m'
 NC='\033[0m'
 
 info()    { echo -e "${BLUE}[*]${NC} $1"; }
 success() { echo -e "${GREEN}[✓]${NC} $1"; }
+warn()    { echo -e "${YELLOW}[!]${NC} $1"; }
 
 if [ "$EUID" -ne 0 ]; then
     echo -e "${RED}[✗]${NC} sudo ile çalıştırın: sudo bash uninstall.sh"
@@ -58,13 +61,10 @@ success "Frontend dosyaları silindi."
 info "Layout dosyasından snowai satırları kaldırılıyor..."
 if [ -f "$LAYOUT" ]; then
     if [ -f "${LAYOUT}.bak" ]; then
-        # Yedek varsa direkt geri yükle — en güvenli yöntem
         cp "${LAYOUT}.bak" "$LAYOUT"
+        rm -f "${LAYOUT}.bak"
         success "Layout yedekten geri yüklendi."
     else
-        # Yedek yoksa sadece snowai satırlarını sil
-        # CSS satırı: <link rel="stylesheet" href="/assets/styles/snowai.css">
-        # JS satırı:  <script src="/js/snowai.js"></script>
         sed -i '/assets\/styles\/snowai\.css/d' "$LAYOUT"
         sed -i '/js\/snowai\.js/d' "$LAYOUT"
         success "Layout temizlendi."
@@ -74,9 +74,7 @@ fi
 # ── Apache config ─────────────────────────────────────────────────────────
 info "Apache config temizleniyor..."
 if [ -f "$APACHE_CONF" ]; then
-    # SnowAI proxy bloğunu sil
     sed -i '/# ---- SnowAI Proxy ----/,/# ---- SnowAI Proxy Sonu ----/d' "$APACHE_CONF"
-    # Alias ve Directory bloklarını sil
     sed -i '/Alias \/js \/usr\/share\/zabbix\/js/d' "$APACHE_CONF"
     sed -i '/Alias \/assets \/usr\/share\/zabbix\/assets/d' "$APACHE_CONF"
     sed -i '/"\/usr\/share\/zabbix\/js"/,/^<\/Directory>/d' "$APACHE_CONF"
@@ -85,6 +83,15 @@ if [ -f "$APACHE_CONF" ]; then
     success "Apache config temizlendi."
 fi
 
+# ── Clone dizinini sil ────────────────────────────────────────────────────
+info "SnowAI repo dizini siliniyor: ${SCRIPT_DIR}"
+PARENT_DIR="$(dirname "$SCRIPT_DIR")"
+cd "$PARENT_DIR"
+rm -rf "$SCRIPT_DIR"
+success "Repo dizini silindi."
+
 echo ""
-echo -e "${GREEN}SnowAI başarıyla kaldırıldı.${NC}"
+echo -e "${GREEN}SnowAI tamamen kaldırıldı.${NC}"
+echo -e "  Yeniden kurmak için:"
+echo -e "  ${YELLOW}git clone https://github.com/serdeneksi/snowai.git && cd snowai && sudo bash install.sh${NC}"
 echo ""
