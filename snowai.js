@@ -284,14 +284,30 @@
         lastCell.appendChild(wrapper);
     }
 
-    function scanTable() {
-        /* Zabbix 6/7 Problems widget: .list-table tbody tr */
-        var rows = document.querySelectorAll(
-            ".list-table tbody tr, " +
-            "table.overflow-ellipsis tbody tr, " +
-            "[data-hintbox-contents] table tbody tr"
+    function isProblemsPage() {
+        /* Sadece Problems sayfasında veya Problems widget içinde çalış */
+        var url = window.location.href;
+        return (
+            url.indexOf("zabbix.php?action=problem") !== -1 ||
+            url.indexOf("zabbix.php?action=dashboard") !== -1 ||
+            url.indexOf("tr_events.php") !== -1 ||
+            document.querySelector(".list-table td.severity, .list-table td[class*='high'], .list-table td[class*='disaster'], .list-table td[class*='average'], .list-table td[class*='warning']") !== null
         );
-        rows.forEach(addButtonToRow);
+    }
+
+    function scanTable() {
+        /* Sadece severity sütunu olan tablolarda çalış */
+        if (!isProblemsPage()) return;
+
+        var rows = document.querySelectorAll(".list-table tbody tr");
+        rows.forEach(function(row) {
+            /* Satırda severity sütunu yoksa atla — Hosts tablosu gibi sayfaları filtreler */
+            var hasSeverity = row.querySelector(
+                "td.severity, td[class*='disaster'], td[class*='high'], td[class*='average'], td[class*='warning'], td[class*='information']"
+            );
+            if (!hasSeverity) return;
+            addButtonToRow(row);
+        });
     }
 
     /* ── Başlatma ─────────────────────────────────────────────────────── */

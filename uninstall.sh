@@ -22,6 +22,14 @@ if [ "$EUID" -ne 0 ]; then
     exit 1
 fi
 
+# Repo dizin kontrolü — snowai dosyaları burada olmalı
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+if [ ! -f "${SCRIPT_DIR}/app.py" ] || [ ! -f "${SCRIPT_DIR}/snowai.js" ]; then
+    echo -e "${RED}[✗]${NC} Bu script snowai repo dizininden çalıştırılmalıdır."
+    echo -e "    Kullanım: cd /path/to/snowai && sudo bash uninstall.sh"
+    exit 1
+fi
+
 echo ""
 echo -e "${RED}SnowAI kaldırılıyor...${NC}"
 echo ""
