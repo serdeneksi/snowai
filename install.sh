@@ -71,8 +71,8 @@ success "Python bağımlılıkları hazır."
 info "SnowAI servis dizini oluşturuluyor: ${INSTALL_DIR}"
 mkdir -p "$INSTALL_DIR"
 
-cp "${REPO_DIR}/app.py"    "$INSTALL_DIR/"
-cp "${REPO_DIR}/teams.py"  "$INSTALL_DIR/"
+cp "${REPO_DIR}/app.py"   "$INSTALL_DIR/"
+cp "${REPO_DIR}/teams.py" "$INSTALL_DIR/"
 
 # config.py — API bilgilerini yerleştir
 sed -e "s|BURAYA_CLOUDFLARE_API_TOKEN_YAZIN|${CF_API_TOKEN}|g" \
@@ -105,6 +105,11 @@ info "Apache proxy yapılandırılıyor..."
 if [ ! -f "$APACHE_CONF" ]; then
     error "Apache Zabbix config bulunamadı: ${APACHE_CONF}"
 fi
+
+# Proxy modüllerini etkinleştir
+info "Apache proxy modülleri etkinleştiriliyor..."
+a2enmod proxy proxy_http headers -q 2>/dev/null || true
+success "Apache proxy modülleri hazır."
 
 # Daha önce eklendi mi?
 if grep -q "SnowAI Proxy" "$APACHE_CONF"; then
@@ -146,8 +151,8 @@ fi
 
 # Syntax kontrolü
 apache2ctl configtest 2>/dev/null || error "Apache config hatası. Kontrol edin: apache2ctl configtest"
-systemctl reload apache2
-success "Apache yeniden yüklendi."
+systemctl restart apache2
+success "Apache yeniden başlatıldı."
 
 # ── AŞAMA 5: Zabbix Frontend ─────────────────────────────────────────────
 info "Zabbix frontend dosyaları kopyalanıyor..."
@@ -167,7 +172,7 @@ if [ ! -f "$LAYOUT" ]; then
     error "Zabbix layout dosyası bulunamadı: ${LAYOUT}"
 fi
 
-if grep -q "snowai" "$LAYOUT"; then
+if grep -q "snowai.css" "$LAYOUT"; then
     warn "Layout dosyasında snowai zaten mevcut, atlanıyor."
 else
     cp "$LAYOUT" "${LAYOUT}.bak"
