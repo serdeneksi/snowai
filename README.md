@@ -91,3 +91,7 @@ tail -f /var/log/snowai.log
 ## Lisans
 
 MIT
+
+![SnowAI](https://github.com/user-attachments/assets/d98cb293-cea2-47ee-a65f-a00fc868bbf2)
+![SnowAI](https://github.com/user-attachments/assets/38c16479-a835-4ae5-b9e3-1db7f91c92d0)
+![SnowAI](https://github.com/user-attachments/assets/4a9e3126-23ed-46c2-8d33-e2e72f04e2d9)
