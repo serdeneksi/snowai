@@ -1,7 +1,6 @@
 #!/bin/bash
 # SnowAI — Kaldırma Scripti
-# Kullanım: sudo bash uninstall.sh
-# Tüm SnowAI dosyalarını ve clone dizinini siler.
+# Kullanım: sudo bash /opt/snowai/uninstall.sh
 # ==========================================================================
 
 set -e
@@ -9,6 +8,7 @@ set -e
 ZBXROOT="/usr/share/zabbix"
 LAYOUT="${ZBXROOT}/app/views/layout.htmlpage.php"
 APACHE_CONF="/etc/apache2/conf-enabled/zabbix.conf"
+INSTALL_PATH_FILE="/opt/snowai/.install_path"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -21,21 +21,19 @@ success() { echo -e "${GREEN}[✓]${NC} $1"; }
 warn()    { echo -e "${YELLOW}[!]${NC} $1"; }
 
 if [ "$EUID" -ne 0 ]; then
-    echo -e "${RED}[✗]${NC} sudo ile çalıştırın: sudo bash uninstall.sh"
-    exit 1
-fi
-
-# Repo dizin kontrolü — snowai dosyaları burada olmalı
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-if [ ! -f "${SCRIPT_DIR}/app.py" ] || [ ! -f "${SCRIPT_DIR}/snowai.js" ]; then
-    echo -e "${RED}[✗]${NC} Bu script snowai repo dizininden çalıştırılmalıdır."
-    echo -e "    Kullanım: cd /path/to/snowai && sudo bash uninstall.sh"
+    echo -e "${RED}[✗]${NC} sudo ile çalıştırın: sudo bash /opt/snowai/uninstall.sh"
     exit 1
 fi
 
 echo ""
 echo -e "${RED}SnowAI kaldırılıyor...${NC}"
 echo ""
+
+# ── Clone dizinini tespit et ──────────────────────────────────────────────
+CLONE_DIR=""
+if [ -f "$INSTALL_PATH_FILE" ]; then
+    CLONE_DIR=$(cat "$INSTALL_PATH_FILE")
+fi
 
 # ── Servis ───────────────────────────────────────────────────────────────
 info "Servis durduruluyor..."
@@ -84,11 +82,13 @@ if [ -f "$APACHE_CONF" ]; then
 fi
 
 # ── Clone dizinini sil ────────────────────────────────────────────────────
-info "SnowAI repo dizini siliniyor: ${SCRIPT_DIR}"
-PARENT_DIR="$(dirname "$SCRIPT_DIR")"
-cd "$PARENT_DIR"
-rm -rf "$SCRIPT_DIR"
-success "Repo dizini silindi."
+if [ -n "$CLONE_DIR" ] && [ -d "$CLONE_DIR" ]; then
+    info "Clone dizini siliniyor: ${CLONE_DIR}"
+    rm -rf "$CLONE_DIR"
+    success "Clone dizini silindi."
+else
+    warn "Clone dizini bulunamadı, manuel silmeniz gerekebilir."
+fi
 
 echo ""
 echo -e "${GREEN}SnowAI tamamen kaldırıldı.${NC}"

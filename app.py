@@ -17,7 +17,7 @@ from config import (
     SNOWAI_PORT,
     SEVERITY_MAP
 )
-from teams import get_team
+from teams import get_team, resolve_ai_team, VALID_TEAMS
 
 # ---------------------------------------------------------------------------
 logging.basicConfig(
@@ -35,15 +35,82 @@ CORS(app, resources={r"/*": {"origins": "*"}})
 
 # ---------------------------------------------------------------------------
 
-SYSTEM_PROMPT = (
-    "You are an IT monitoring analyst. "
+SYSTEM_PROMPT_BASE = (
+    "You are a senior IT monitoring analyst writing for a Turkish IT operations team. "
     "Respond ONLY with a single-line JSON object, no markdown, no code blocks, no extra text. "
-    'Format: {"analysis": "<Turkish 1-2 sentence technical analysis>", "urgency": "<Dusuk|Orta|Yuksek|Kritik>"} '
-    "The analysis field must be in Turkish. Determine urgency based on alarm severity."
+    "The analysis field must be in fluent, professional, grammatically correct Turkish — "
+    "the way a senior Turkish sysadmin would write in an incident ticket. No awkward "
+    "word-for-word translation, no broken grammar, no redundant phrasing.\n\n"
+    "CRITICAL RULES:\n\n"
+    "1. TERMINOLOGY — established technical terms stay in their original/standard form, "
+    "do NOT translate them into clunky Turkish equivalents:\n"
+    "   - 'cluster' stays 'cluster' (not 'kume' or awkward translations)\n"
+    "   - 'shard', 'node', 'index', 'replica' stay as-is (Elasticsearch/OpenSearch terms)\n"
+    "   - 'disk', 'CPU', 'memory/RAM', 'process', 'thread', 'log', 'queue', 'cache', "
+    "'load balancer', 'firewall', 'container' stay as-is — these are standard industry terms "
+    "Turkish IT professionals use daily, never translate them.\n"
+    "   - Write naturally: mix Turkish sentence structure with these English technical nouns, "
+    "exactly as a Turkish IT professional would write in Slack or a ticket.\n\n"
+    "2. SERVICE/STACK RECOGNITION — recognize service names and abbreviations in the alarm text "
+    "and tailor the analysis to that specific technology instead of giving generic advice:\n"
+    "   - 'ES', 'Elasticsearch', 'ELK', 'OpenSearch' -> Elasticsearch/OpenSearch cluster context "
+    "(shards, indices, node count, cluster health status green/yellow/red)\n"
+    "   - 'Kafka' -> broker, partition, consumer lag context\n"
+    "   - 'Redis' -> memory eviction, replication, key expiry context\n"
+    "   - 'MongoDB' -> replica set, oplog context\n"
+    "   - 'NGINX', 'Apache', 'IIS' -> web server worker/connection context\n"
+    "   - 'Vault', 'HashiCorp Vault' -> secret management, token lease, seal/unseal status context\n"
+    "   - If you recognize the stack, your analysis must reflect that specific technology's "
+    "normal failure patterns, not a generic server resource explanation.\n\n"
+    "3. OPERATING SYSTEM DETECTION — infer the OS from disk/path naming in the alarm text "
+    "before suggesting any diagnostic commands or terminology:\n"
+    "   - Drive letters (C:, D:, E: etc.) or paths like C:\\Windows, C:\\Program Files -> WINDOWS. "
+    "Reference Task Manager, Resource Monitor, Event Viewer, PowerShell (Get-Process, Get-Counter), "
+    "services.msc — NEVER suggest top/htop/systemctl for Windows hosts.\n"
+    "   - Root-relative paths (/, /var, /boot, /home, /etc, /usr) or hostnames containing "
+    "'linux', 'ubuntu', 'centos', 'rhel', 'debian' -> LINUX. Reference top/htop, systemctl, "
+    "journalctl, df -h, free -m — NEVER suggest Windows-specific tools.\n"
+    "   - If OS cannot be determined from the alarm text, give OS-agnostic guidance "
+    "instead of guessing.\n\n"
+    "4. SEVERITY CALIBRATION — base urgency on the actual alarm severity field provided, not just the wording:\n"
+    "   - severity 0-1 (Not classified/Information) -> Dusuk\n"
+    "   - severity 2 (Warning) -> Orta\n"
+    "   - severity 3 (Average) -> Orta or Yuksek depending on context\n"
+    "   - severity 4 (High) -> Yuksek\n"
+    "   - severity 5 (Disaster) -> Kritik\n\n"
+    "5. ESCALATION GUIDANCE — be direct and decisive, avoid vague hedging language like "
+    "'muhtemelen', 'olabilir', 'kontrol etmek gerekebilir' stacked together. State a clear "
+    "assessment: short durations (under 5 minutes) on non-critical hosts are often transient "
+    "and self-recovering — say so plainly and recommend monitoring. Longer durations "
+    "(over 15-30 minutes) or alarms on hostnames suggesting production/critical systems "
+    "(containing 'prod', 'db', 'core', 'main', 'master', 'critical') warrant immediate, "
+    "explicit escalation language — say it needs immediate attention, not 'might need investigation'."
 )
 
 
-def call_cloudflare(problem: str, host: str, severity: str, duration: str) -> dict:
+def build_system_prompt(needs_team: bool) -> str:
+    """
+    needs_team True ise (teams.py'de keyword eşleşmesi bulunamadıysa),
+    AI'dan ekip tahmini de istenir — ama sadece VALID_TEAMS listesinden.
+    """
+    if not needs_team:
+        return SYSTEM_PROMPT_BASE + (
+            '\n\nFormat: {"analysis": "<Turkish 1-2 sentence technical analysis>", '
+            '"urgency": "<Dusuk|Orta|Yuksek|Kritik>"}'
+        )
+
+    team_list = ", ".join('"' + t + '"' for t in VALID_TEAMS)
+    return SYSTEM_PROMPT_BASE + (
+        "\n\n6. TEAM ASSIGNMENT — no keyword rule matched this alarm. Based on the technology "
+        "or service mentioned, pick the SINGLE most appropriate team from this EXACT list "
+        "(copy the string exactly, do not invent a new team name): [" + team_list + "]. "
+        "If genuinely uncertain, use \"Sistem ve Altyapı\".\n\n"
+        'Format: {"analysis": "<Turkish 1-2 sentence technical analysis>", '
+        '"urgency": "<Dusuk|Orta|Yuksek|Kritik>", "team_guess": "<one of the exact team names above>"}'
+    )
+
+
+def call_cloudflare(problem: str, host: str, severity: str, duration: str, needs_team: bool = False) -> dict:
     severity_label = SEVERITY_MAP.get(str(severity), severity)
 
     user_msg = (
@@ -54,9 +121,11 @@ def call_cloudflare(problem: str, host: str, severity: str, duration: str) -> di
         "Bu alarm icin kisa analiz yap ve aciliyeti belirle."
     )
 
+    system_prompt = build_system_prompt(needs_team)
+
     payload = json.dumps({
         "messages": [
-            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "system", "content": system_prompt},
             {"role": "user",   "content": user_msg}
         ]
     }).encode("utf-8")
@@ -96,6 +165,10 @@ def call_cloudflare(problem: str, host: str, severity: str, duration: str) -> di
     if start != -1 and end > start:
         raw = raw[start:end]
 
+    # Gecersiz escape karakterlerini temizle (orn. C:\ -> C:/)
+    import re
+    raw = re.sub(r'\\(?!["\\/bfnrtu])', r'/', raw)
+
     return json.loads(raw)
 
 
@@ -124,8 +197,11 @@ def analyze():
 
     logger.info("Analiz istegi - host=%s problem=%s severity=%s", host, problem, severity)
 
+    team_info = get_team(problem, host)
+    needs_team = not team_info.get("matched", True)
+
     try:
-        ai_result = call_cloudflare(problem, host, severity, duration)
+        ai_result = call_cloudflare(problem, host, severity, duration, needs_team=needs_team)
     except urllib.error.URLError as exc:
         logger.error("Cloudflare baglanti hatasi: %s", exc)
         return jsonify({"error": "Yapay zeka servisine ulasilamadi", "detail": str(exc)}), 502
@@ -136,7 +212,12 @@ def analyze():
         logger.error("Beklenmedik hata: %s", exc)
         return jsonify({"error": "Sunucu hatasi", "detail": str(exc)}), 500
 
-    team_info = get_team(problem, host)
+    if needs_team:
+        ai_team_guess = ai_result.get("team_guess", "")
+        resolved = resolve_ai_team(ai_team_guess)
+        team_info["team"] = resolved["team"]
+        team_info["channel"] = resolved["channel"]
+        logger.info("AI ekip tahmini kullanildi - guess=%s resolved=%s", ai_team_guess, resolved["team"])
 
     response = {
         "analysis":  ai_result.get("analysis", "Analiz alinamadi."),

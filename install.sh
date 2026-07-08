@@ -180,6 +180,11 @@ else
     success "Layout dosyası güncellendi."
 fi
 
+# ── Kaldırma için dizini ve scripti kaydet ───────────────────────────────
+echo "$REPO_DIR" > /opt/snowai/.install_path
+cp "${REPO_DIR}/uninstall.sh" /opt/snowai/uninstall.sh
+chmod +x /opt/snowai/uninstall.sh
+
 # ── AŞAMA 6: Doğrulama ───────────────────────────────────────────────────
 echo ""
 info "Kurulum doğrulanıyor..."
@@ -206,4 +211,7 @@ echo ""
 echo -e "  Zabbix → Monitoring → Problems sayfasını açın"
 echo -e "  Her alarm satırında ${BLUE}[AI Analiz]${NC} butonu görünmeli"
 echo -e "  Log izleme: ${YELLOW}tail -f /var/log/snowai.log${NC}"
+echo ""
+echo -e "  Kaldırmak için:"
+echo -e "  ${YELLOW}sudo bash /opt/snowai/uninstall.sh${NC}"
 echo ""
